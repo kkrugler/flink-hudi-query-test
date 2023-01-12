@@ -1,0 +1,13 @@
+{
+  "type":"record",
+  "name":"EnrichedRecord",
+  "namespace":"com.scaleunlimited",
+  
+  "fields":[
+    {"name":"event_time","type":"long"},
+    {"name":"data","type":"int"},
+    {"name":"enrichment","type":["null", "string"], "default": null},
+    {"name":"key","type":"string"},
+    {"name":"partition","type":"string"}
+  ]
+}
