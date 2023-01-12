@@ -1,0 +1,10 @@
+{
+  "type":"record",
+  "name":"ExampleRecord",
+  "namespace":"com.scaleunlimited",
+  
+  "fields":[
+    {"name":"event_time","type":"long"},
+    {"name":"data","type":"int"}
+  ]
+}
