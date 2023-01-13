@@ -3,19 +3,16 @@ package com.scaleunlimited;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
@@ -27,25 +24,31 @@ import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connector.ProviderContext;
+import org.apache.flink.table.connector.source.DataStreamScanProvider;
+import org.apache.flink.table.connector.source.DynamicTableSource.DataStructureConverter;
+import org.apache.flink.table.connector.source.ScanTableSource.ScanContext;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-class ExampleWorkflowTest {
-
+public class ExampleWorkflowTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ExampleWorkflowTest.class);
+    
     private static final int PARALLELISM = 2;
     private static final int MAX_PARALLELISM = 8192;
-    private static final long CHECKPOINT_INTERVAL_MS = 10 * 1000L;
+    private static final long CHECKPOINT_INTERVAL_MS = 5 * 1000L;
 
     private static final int NUM_RESULTS = 100_000;
     
     @Test
-    void testHudiIncrementalQuery() throws Exception {
-        File testDir = getTestDir("testHudiIncrementalQuery", true);
+    void testHudiQueryOfExistingTable() throws Exception {
+        File testDir = getTestDir("testHudiQueryOfExistingTable", true);
         File inputDir = writeHudiFiles(testDir);
         
         Configuration conf = new Configuration();
@@ -55,14 +58,20 @@ class ExampleWorkflowTest {
             .setInput(makeHudiInput(env, conf, inputDir.getAbsolutePath()))
             .build();
     
+        CountRecordsRead.resetCount();
         JobClient readerClient = env.executeAsync("reader workflow");
         
-        while (!isDone(readerClient.getJobStatus().get())) {
-            Thread.sleep(1000);
+        int readCount = 0;
+        // Set max time based on number of records, and at least one checkpoint
+        long maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 2, NUM_RESULTS / 10);
+        while ((readCount < NUM_RESULTS) && (System.currentTimeMillis() < maxTime)) {
+            Thread.sleep(100);
+            readCount = CountRecordsRead.getCount();
         }
         
-        Integer finalReadCount = (Integer)readerClient.getJobExecutionResult().get().getAccumulatorResult(ExampleReaderWorkflow.RECORD_COUNTER_NAME);
-        assertEquals(NUM_RESULTS, (int)finalReadCount);
+        readerClient.cancel();
+        
+        assertEquals(NUM_RESULTS, readCount);
     }
     
     private File writeHudiFiles(File testDir) throws Exception {
@@ -110,12 +119,13 @@ class ExampleWorkflowTest {
             .setOutput(HudiUtils.makeHudiOutput(env, conf, outputDir.getAbsolutePath(), PARALLELISM))
             .build();
         
-        JobClient writerClient = env.executeAsync("writer workflow");
+        LOGGER.info("Starting execution of writer workflow...");
+        env.executeAsync("writer workflow");
         
         // Wait for table to be created, before starting up reader
-        while (!isDone(writerClient.getJobStatus().get()) && !tableExists(outputDir)) {
-            Thread.sleep(10);
-        }
+        // If we don't do this, the reader says that no table exists
+//        LOGGER.info("Waiting for Hudi table to exist...");
+//        Thread.sleep(CHECKPOINT_INTERVAL_MS * 2);
         
         StreamExecutionEnvironment env2 = makeExecutionEnvironment(testDir, conf);
         
@@ -123,26 +133,21 @@ class ExampleWorkflowTest {
             .setInput(makeHudiInput(env2, conf, outputDir.getAbsolutePath()))
             .build();
         
+        LOGGER.info("Starting execution of reader workflow...");
+        CountRecordsRead.resetCount();
         JobClient readerClient = env2.executeAsync("reader workflow");
         
-        JobStatus writerStatus = null;
-        JobStatus readerStatus = null;
-        
-        while (!isDone(writerStatus) && !isDone(readerStatus)) {
-            writerStatus = writerClient.getJobStatus().get();
-            System.out.println("Writer: " + writerStatus);
-
-            readerStatus = readerClient.getJobStatus().get();
-            System.out.println("Reader: " + readerStatus);
-
-            Thread.sleep(1000);
+        int readCount = 0;
+        // Set max time based on number of records, and at least one checkpoint
+        long maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 3, NUM_RESULTS / 10);
+        while ((readCount < NUM_RESULTS) && (System.currentTimeMillis() < maxTime)) {
+            Thread.sleep(100);
+            readCount = CountRecordsRead.getCount();
         }
         
-        Integer finalWriteCount = (Integer)writerClient.getJobExecutionResult().get().getAccumulatorResult(ExampleWriterWorkflow.RECORD_COUNTER_NAME);
-        assertEquals(NUM_RESULTS, (int)finalWriteCount);
+        readerClient.cancel();
         
-        Integer finalReadCount = (Integer)readerClient.getJobExecutionResult().get().getAccumulatorResult(ExampleReaderWorkflow.RECORD_COUNTER_NAME);
-        assertEquals(NUM_RESULTS, (int)finalReadCount);
+        assertEquals(NUM_RESULTS, readCount);
     }
 
     private StreamExecutionEnvironment makeExecutionEnvironment(File testDir, Configuration conf) throws Exception {
@@ -176,54 +181,10 @@ class ExampleWorkflowTest {
         return env;
     }
 
-    private boolean tableExists(File outputDir) {
-        if (!outputDir.exists()) {
-            return false;
-        }
-        
-        File[] partitions = outputDir.listFiles(new FilenameFilter() {
-            
-            @Override
-            public boolean accept(File dir, String name) {
-                // Partition dir looks like 20230112-1706
-                return Pattern.matches("\\d{8}\\-\\d{4}", name);
-            }
-        });
-        
-        if (partitions.length == 0) {
-            return false;
-        }
-        
-        File partitionDir = partitions[0];
-        if (!partitionDir.isDirectory()) {
-            return false;
-        }
-        
-        File[] parquetFiles = partitionDir.listFiles(new FilenameFilter() {
-            
-            @Override
-            public boolean accept(File dir, String name) {
-                return name.endsWith(".parquet");
-            }
-        });
-        
-        return parquetFiles.length > 0;
-    }
-
-    private boolean isDone(JobStatus status) {
-        return (status == JobStatus.CANCELED)
-                || (status == JobStatus.FAILED)
-                || (status == JobStatus.FINISHED);
-    }
-
     private DataStream<EnrichedRecord> makeHudiInput(StreamExecutionEnvironment env,
             Configuration config, String tableDir) {
-        HudiUtils.setHudiWriteConfig(config, tableDir, PARALLELISM);
-        config.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
-        config.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
-        config.set(FlinkOptions.READ_TASKS, PARALLELISM);
-        // TODO - I assume commit date is stored in state, for recovery
-        config.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+        
+        HudiUtils.setHudiReadConfig(config, tableDir, PARALLELISM);
 
         DataType rowDataType = org.apache.hudi.util.AvroSchemaConverter.convertToDataType(EnrichedRecord.SCHEMA$);
         String[] partitionKeys = new String[] {HudiConstants.PARTITION_PATH_FIELD};
@@ -235,11 +196,38 @@ class ExampleWorkflowTest {
                         "no_partition",
                         config);
 
-        InputFormat<RowData, ?> inputFormat = hoodieTableSource.getInputFormat();
-
-        DataStream<EnrichedRecord> result =
-                env.createInput(inputFormat, TypeInformation.of(RowData.class))
-                        .map(new ConvertToEnrichedRecord(config));
+        DataStreamScanProvider dsa = (DataStreamScanProvider)hoodieTableSource.getScanRuntimeProvider(new ScanContext() {
+            
+            @Override
+            public <T> TypeInformation<T> createTypeInformation(LogicalType producedLogicalType) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+            
+            @Override
+            public <T> TypeInformation<T> createTypeInformation(DataType producedDataType) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+            
+            @Override
+            public DataStructureConverter createDataStructureConverter(DataType producedDataType) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+        });
+        
+        ProviderContext pc = new ProviderContext() {
+            
+            @Override
+            public Optional<String> generateUid(String name) {
+                return Optional.of(name + "-ExampleWorkflow");
+            }
+        };
+        
+        DataStream<EnrichedRecord> result = dsa.produceDataStream(pc, env)
+                .map(new ConvertToEnrichedRecord(config))
+                .name("Convert RowData to EnrichedRecord");
 
         return result;
     }
