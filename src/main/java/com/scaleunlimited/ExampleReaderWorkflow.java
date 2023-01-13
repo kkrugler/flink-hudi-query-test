@@ -7,7 +7,6 @@ public class ExampleReaderWorkflow {
 
     public static final String RECORD_COUNTER_NAME = "enriched-record-read-counter";
     
-
     private DataStream<EnrichedRecord> input;
     
     public ExampleReaderWorkflow setInput(DataStream<EnrichedRecord> input) {
@@ -16,7 +15,9 @@ public class ExampleReaderWorkflow {
     }
     
     public void build() {
-        input.filter(new CountRecords(RECORD_COUNTER_NAME))
-        .addSink(new DiscardingSink<>());
+        input.filter(new CountRecordsRead(RECORD_COUNTER_NAME))
+        .name("Count read record")
+        .addSink(new DiscardingSink<>())
+        .name("End of reader workflow");
     }
 }

@@ -2,27 +2,17 @@ Some issues I've run across...
 
 ## Incremental Query
 
-The `testHudiWriteAndIncrementalRead` test fails, because nothing is read from the Hudi table. This test starts two workflows, one doing writes (to a MOR table, using bulk insert mode) while the other workflow does an incremental query. I was expecting this to work.
+The `testHudiWriteAndIncrementalRead` test fails, because nothing is read from the Hudi table unless I put a
+delay in between when the write workflow starts running, and when I start the read workflow. The delay
+has to be long enough for at least one checkpoint has happened with the write workflow.
 
-However running `testHudiIncrementalQuery` succeeds in reading the expected number of records.
-
-When no records are being read in the failing test, I see this in the logs:
-
-```
-23/01/09 15:32:50 WARN source.IncrementalInputSplits:127 - No splits found for the table under path /Users/kenkrugler/git/flink-hudi-query-test/target/test/ExampleWorkflowTest/testHudiIncrementalQuery/hudi-table
-23/01/09 15:32:50 WARN table.HoodieTableSource:371 - No input splits generate for incremental read, returns empty collection instead
-```
+This is an improvement over the previous situation, where no matter what I did, I couldn't read any data.
 
 ## Javalin
 
-When running on a Flink cluster, Javalin fails to start due to an error creating the `WebSocketServerFactory`. I think this could be due to class conflicts,
-where the Flink infrastructure also uses Jetty. It feels like Hudi should shade any networking code it uses, to avoid this type of problem.
-
-Related is that when Javalin can't start up properly, it automatically stops itself. But then the Hudi code that's trying to start up
-Javalin fails, because once Javalin has been stopped, you need to create a new instance of the app if you want to try to start it again.
-
-It's this code:
-
+1. Why does Javalin need to be running when writing to Hudi?
+1. When running on a Flink cluster, Javalin fails to start due to an error creating the `WebSocketServerFactory`. I think this could be due to class conflicts, where the Flink infrastructure also uses Jetty. It feels like Hudi should shade any networking code it uses, to avoid this type of problem.
+1. Related is that when Javalin can't start up properly, it automatically stops itself. But then the Hudi code that's trying to start up Javalin fails, because once Javalin has been stopped, you need to create a new instance of the app if you want to try to start it again. It's this code:
 ``` java
     for (int attempt = 0; attempt < START_SERVICE_MAX_RETRIES; attempt++) {
       // Returns port to try when trying to bind a service. Handles wrapping and skipping privileged ports.
@@ -45,8 +35,6 @@ It's this code:
     }
     throw new IOException(String.format("Timeline server start failed on port %d, after retry %d times", port, START_SERVICE_MAX_RETRIES));
 ```
-
-A more fundamental question is why Javalin needs to be running during a Flink write task.
 
 ## Embedded Timeline Server disabled
 
@@ -157,6 +145,5 @@ Caused by: java.lang.ClassCastException: class org.apache.hudi.common.fs.HoodieW
     ... 39 more
 ```
 
-I'm wondering if there's some code in Hudi that's hanging onto a classloader (in a thread?), and that's why we have the same Hudi class being
-found in two different instances of Flink's `ChildFirstClassLoader`.
+I'm wondering if there's some code in Hudi that's hanging onto a classloader (in a thread?), and that's why we have the same Hudi class being found in two different instances of Flink's `ChildFirstClassLoader`.
  
