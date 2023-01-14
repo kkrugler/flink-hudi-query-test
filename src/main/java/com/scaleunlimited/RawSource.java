@@ -5,14 +5,16 @@ import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunctio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.scaleunlimited.records.RawRecord;
+
 /**
- * SourceFunction that generates a target number of ExampleRecord records.
+ * SourceFunction that generates a target number of raw (unenriched) records.
  *
  */
 @SuppressWarnings("serial") 
-public class ExampleSource extends RichParallelSourceFunction<ExampleRecord> {
+public class RawSource extends RichParallelSourceFunction<RawRecord> {
     private static final Logger LOGGER = LoggerFactory
-            .getLogger(ExampleSource.class);
+            .getLogger(RawSource.class);
     
     private int maxValue;
     
@@ -20,7 +22,7 @@ public class ExampleSource extends RichParallelSourceFunction<ExampleRecord> {
     private transient int curValue;
     private transient int incBy;
     
-    public ExampleSource(int maxValue) {
+    public RawSource(int maxValue) {
         this.maxValue = maxValue;
     }
     
@@ -35,11 +37,11 @@ public class ExampleSource extends RichParallelSourceFunction<ExampleRecord> {
     }
     
     @Override
-    public void run(SourceContext<ExampleRecord> ctx) throws Exception {
+    public void run(SourceContext<RawRecord> ctx) throws Exception {
         running = true;
 
         while (running && (curValue < maxValue)) {
-            ctx.collect(new ExampleRecord(System.currentTimeMillis(), curValue));
+            ctx.collect(new RawRecord(System.currentTimeMillis(), curValue));
             curValue += incBy;
         }
         

@@ -1,4 +1,4 @@
-package com.scaleunlimited;
+package com.scaleunlimited.functions;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -15,8 +15,18 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.BroadcastProcessFunction;
 import org.apache.flink.util.Collector;
 
+import com.scaleunlimited.EnrichedRecord;
+import com.scaleunlimited.HudiConstants;
+import com.scaleunlimited.records.EnrichmentRecord;
+import com.scaleunlimited.records.RawRecord;
+
+/**
+ * Typical Flink function to add enrichment data (from a broadcast stream) to a stream
+ * of unenriched (raw) records.
+ *
+ */
 @SuppressWarnings("serial")
-public class AddEnrichments extends BroadcastProcessFunction<ExampleRecord, EnrichmentRecord, EnrichedRecord> {
+public class AddEnrichmentsFunction extends BroadcastProcessFunction<RawRecord, EnrichmentRecord, EnrichedRecord> {
 
     public static final MapStateDescriptor<EnrichmentRecord, Void> BROADCAST_STATE =
             new MapStateDescriptor<>(
@@ -47,7 +57,7 @@ public class AddEnrichments extends BroadcastProcessFunction<ExampleRecord, Enri
     }
 
     @Override
-    public void processElement(ExampleRecord in,
+    public void processElement(RawRecord in,
             ReadOnlyContext ctx,
             Collector<EnrichedRecord> out) throws Exception {
         if (enrichmentMap == null) {

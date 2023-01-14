@@ -1,4 +1,4 @@
-package com.scaleunlimited;
+package com.scaleunlimited.functions;
 
 import org.apache.avro.Schema;
 import org.apache.flink.api.common.functions.RichMapFunction;
@@ -10,14 +10,19 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.scaleunlimited.EnrichedRecord;
 
+/**
+ * Given a RowData record that we've read from Hudi, convert to an EnrichedRecord
+ *
+ */
 @SuppressWarnings("serial")
-public class ConvertToEnrichedRecord extends RichMapFunction<RowData, EnrichedRecord> {
+public class ConvertRowDataToEnrichedFunction extends RichMapFunction<RowData, EnrichedRecord> {
 
     private String avroSchemaStr;
     private transient RowType rowType;
 
-    public ConvertToEnrichedRecord(Configuration config) {
+    public ConvertRowDataToEnrichedFunction(Configuration config) {
         avroSchemaStr = config.getString(FlinkOptions.SOURCE_AVRO_SCHEMA);
     }
 
@@ -37,6 +42,9 @@ public class ConvertToEnrichedRecord extends RichMapFunction<RowData, EnrichedRe
     @VisibleForTesting
     static EnrichedRecord convert(RowData value, RowType rt) throws Exception {
 
+        // Do manual conversion to mimic what a highly performant workflow does.
+        // We could use RowDataToAvroConverters.createConverter(LogicalType) to
+        // create a convertor that would handle this for us.
         return EnrichedRecord.newBuilder()
                 .setPartition(value.getString(rt.getFieldIndex("partition")).toString())
                 .setEventTime(value.getLong(rt.getFieldIndex("event_time")))

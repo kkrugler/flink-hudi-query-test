@@ -1,7 +1,7 @@
 {
   "type":"record",
-  "name":"ExampleRecord",
-  "namespace":"com.scaleunlimited",
+  "name":"RawRecord",
+  "namespace":"com.scaleunlimited.records",
   
   "fields":[
     {"name":"event_time","type":"long"},

@@ -1,14 +1,35 @@
+## Overview
+
+This is a workflow that mimics a high-performance workflow I've been developing for a client. It's a
+pretty standard design pattern, where a stream of incoming "raw" records are enriched by a (broadcast)
+stream of enrichment data.
+
+This example workflow writes the enriched results to a Hudi table. I've also got a simple workflow that
+reads from that same Hudi table. There's a test that first create the table and then read from it, and
+(most importantly) a test that reads from the table at the same time that it's being written to.
+
+In both cases the read query is incremental, in that it generates an unbounded stream of records which
+is updated whenever a new snapshot is available in the table.
+
+The entire workflow is implemented using the lowest-level Hudi APIs (versus the higher level Flink Table
+APIs) for reasons of efficiency. The key methods for writing and reading Hudi tables using these low-level APIs are found in the HudiUtils class, since the workflows themselves are source and sink agnostic (for testing purposes).
+
+The input (RawRecord) and output (EnrichedRecord) classes are generated from Avro files found in the
+`src/main/resources/avro` sub-dir, since working with Hudi works best when you have Avro schemas.
+
+## Known Issues
+
 Some issues I've run across...
 
-## Incremental Query
+### Incremental Query failure with no snapshot
 
-The `testHudiWriteAndIncrementalRead` test fails, because nothing is read from the Hudi table unless I put a
-delay in between when the write workflow starts running, and when I start the read workflow. The delay
-has to be long enough for at least one checkpoint has happened with the write workflow.
+The `testHudiWriteAndIncrementalRead` test will fail if I don't include an artificial delay between starting
+the writer workflow and starting the reader workflow. It fails because the reader workflow immediately
+terminates unless at least one checkpoint has happened with the write workflow.
 
 This is an improvement over the previous situation, where no matter what I did, I couldn't read any data.
 
-## Javalin
+### Javalin
 
 1. Why does Javalin need to be running when writing to Hudi?
 1. When running on a Flink cluster, Javalin fails to start due to an error creating the `WebSocketServerFactory`. I think this could be due to class conflicts, where the Flink infrastructure also uses Jetty. It feels like Hudi should shade any networking code it uses, to avoid this type of problem.
@@ -36,7 +57,7 @@ This is an improvement over the previous situation, where no matter what I did, 
     throw new IOException(String.format("Timeline server start failed on port %d, after retry %d times", port, START_SERVICE_MAX_RETRIES));
 ```
 
-## Embedded Timeline Server disabled
+### Embedded Timeline Server disabled
 
 I see this logged while running:
 
@@ -46,7 +67,7 @@ I see this logged while running:
 
 But I thought Hudi needed a timeline service when writing?
 
-## Logging
+### Logging
 
 Log4J is used in 386 source files, via counting occurrences of `import org.apache.log4j.LogManager`.
 
@@ -65,7 +86,7 @@ This makes it very hard for developers to know that all of the logging output is
 
 Shouldn't everything use Slf4J, and then the client can configure the appropriate logging infrastructure?
 
-## No schema found for reader if table doesn't exist
+### No schema found for reader if table doesn't exist
 
 If I start the reader code before the Hudi table has been sufficiently started, I see this:
 
@@ -84,7 +105,7 @@ java.lang.NullPointerException: null
 
 Shouldn't the Hudi reader code be able to get the Avro schema from the configuration, the same as the writer?
 
-## Classloader bug
+### Classloader bug
 
 If I run the workflow twice in the same Task Manager, I get this exception:
 

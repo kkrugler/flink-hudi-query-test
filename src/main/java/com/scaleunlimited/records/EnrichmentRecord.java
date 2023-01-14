@@ -1,7 +1,11 @@
-package com.scaleunlimited;
+package com.scaleunlimited.records;
 
 import java.io.Serializable;
 
+/**
+ * End result of our workflow, which we write to Hudi, and read back
+ * 
+ */
 @SuppressWarnings("serial")
 public class EnrichmentRecord implements Serializable {
 

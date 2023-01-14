@@ -3,6 +3,8 @@ package com.scaleunlimited;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 
+import com.scaleunlimited.functions.CountRecordsReadFunction;
+
 public class ExampleReaderWorkflow {
 
     public static final String RECORD_COUNTER_NAME = "enriched-record-read-counter";
@@ -15,7 +17,7 @@ public class ExampleReaderWorkflow {
     }
     
     public void build() {
-        input.filter(new CountRecordsRead(RECORD_COUNTER_NAME))
+        input.filter(new CountRecordsReadFunction(RECORD_COUNTER_NAME))
         .name("Count read record")
         .addSink(new DiscardingSink<>())
         .name("End of reader workflow");
