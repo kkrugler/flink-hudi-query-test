@@ -12,6 +12,9 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import com.scaleunlimited.records.EnrichmentRecord;
+import com.scaleunlimited.records.RawRecord;
+
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -60,8 +63,8 @@ public class ExampleWriterTool implements Callable<Integer> {
         env.setStateBackend(new HashMapStateBackend());
         env.getConfig().enableObjectReuse();
         
-        DataStream<ExampleRecord> input = env
-                .addSource(new ExampleSource(numRecords), "Example Source")
+        DataStream<RawRecord> input = env
+                .addSource(new RawSource(numRecords), "Example Source")
                 .assignTimestampsAndWatermarks(WatermarkStrategy.noWatermarks())
                 .setParallelism(parallelism);
         

@@ -8,9 +8,17 @@ import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunctio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.scaleunlimited.records.EnrichmentRecord;
+
+/**
+ * A Flink source function to generate a (bounded) stream of enrichment records.
+ *
+ */
 @SuppressWarnings("serial")
 public class EnrichmentSource extends RichParallelSourceFunction<EnrichmentRecord>  {
     private static final Logger LOGGER = LoggerFactory.getLogger(EnrichmentSource.class);
+    
+    private static final int NUM_ENRICHMENTS = 100;
     
     private List<EnrichmentRecord> enrichments;
     
@@ -53,11 +61,16 @@ public class EnrichmentSource extends RichParallelSourceFunction<EnrichmentRecor
         running = false;
     }
     
+    /**
+     * Generate NUM_ENRICHMENTS fake enrichment records
+     *  
+     * @return list of fake enrichments
+     */
     public static List<EnrichmentRecord> makeEnrichments() {
-        long timestamp = System.currentTimeMillis() - 1000;
+        long timestamp = System.currentTimeMillis() - NUM_ENRICHMENTS;
         
         List<EnrichmentRecord> result = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < NUM_ENRICHMENTS; i++) {
             result.add(new EnrichmentRecord(timestamp + i, i, "Enrichment-" + i));
         }
         
