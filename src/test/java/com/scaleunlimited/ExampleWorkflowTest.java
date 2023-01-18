@@ -1,12 +1,14 @@
 package com.scaleunlimited;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.configuration.Configuration;
@@ -109,7 +111,7 @@ public class ExampleWorkflowTest {
             .build();
         
         LOGGER.info("Starting execution of writer workflow...");
-        env.executeAsync("writer workflow");
+        JobClient writerClient = env.executeAsync("writer workflow");
         
         // Wait for table to be created, before starting up reader
         // If we don't do this, the reader says that no table exists
@@ -126,11 +128,19 @@ public class ExampleWorkflowTest {
         CountRecordsReadFunction.resetCount();
         JobClient readerClient = env2.executeAsync("reader workflow");
         
+        // Wait for write workflow to finish.
+        LOGGER.info("Waiting for writer workflow to finish...");
+        long maxTime = System.currentTimeMillis() + NUM_RESULTS/10;
+        while ((writerClient.getJobStatus().get() == JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
+            Thread.sleep(100);
+        }
+        
+        assertNotEquals(JobStatus.RUNNING, writerClient.getJobStatus().get());
+        
+        LOGGER.info("Waiting for reader workflow to finish...");
         int readCount = 0;
         // Set max time based on number of records, and at least one checkpoint
-        // TODO better would be to first wait for the writer workflow to finish,
-        // and then enter this loop.
-        long maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 4, NUM_RESULTS / 10);
+        maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 2, NUM_RESULTS / 10);
         while ((readCount < NUM_RESULTS) && (System.currentTimeMillis() < maxTime)) {
             Thread.sleep(100);
             readCount = CountRecordsReadFunction.getCount();
@@ -146,7 +156,7 @@ public class ExampleWorkflowTest {
         logFile.mkdirs();
         System.setProperty("log.file", logFile.getAbsolutePath());
 
-        // Set up for final checkpoint (and thus final commit of inflight data) when workflow ends
+        // Set up for final checkpoint (and thus final commit of in-flight data) when workflow ends
         conf.setBoolean(
                 ExecutionCheckpointingOptions.ENABLE_CHECKPOINTS_AFTER_TASKS_FINISH, true);
 
