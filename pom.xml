@@ -15,9 +15,9 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
         <avro.version>1.10.0</avro.version>
-        <flink.version>1.15.1</flink.version>
-        <hudi.flink.version>1.15.x</hudi.flink.version>
-        <hudi.version>0.12.2</hudi.version>
+        <flink.version>1.16.0</flink.version>
+        <hudi.flink.version>1.16.x</hudi.flink.version>
+        <hudi.version>0.13.0</hudi.version>
         <hive.version>2.3.1</hive.version>
         <hadoop.version>3.1.4</hadoop.version>
         <junit.version>5.8.1</junit.version>
@@ -170,6 +170,10 @@
                 <exclusion>
                     <groupId>org.apache.hudi</groupId>
                     <artifactId>hudi-flink1.14.x</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-flink1.15.x</artifactId>
                 </exclusion>
 				<exclusion>
 					<groupId>org.apache.flink</groupId>
