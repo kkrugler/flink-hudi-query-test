@@ -39,10 +39,17 @@ public class RawSource extends RichParallelSourceFunction<RawRecord> {
     @Override
     public void run(SourceContext<RawRecord> ctx) throws Exception {
         running = true;
-
+        
+        int numRecords = 0;
         while (running && (curValue < maxValue)) {
-            ctx.collect(new RawRecord(System.currentTimeMillis(), curValue));
+            long eventTime = System.currentTimeMillis();
+            // Each record has a time that's backed up by
+            // 0...4 minutes.
+            eventTime -= (numRecords % 5) * 60 * 1000L;
+            
+            ctx.collect(new RawRecord(eventTime, curValue));
             curValue += incBy;
+            numRecords++;
         }
         
         LOGGER.info("Exiting ExampleSouce");

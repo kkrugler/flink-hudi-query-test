@@ -18,12 +18,13 @@
         <flink.version>1.15.1</flink.version>
         <hudi.flink.version>1.15.x</hudi.flink.version>
         <hudi.version>0.12.2</hudi.version>
+        <hive.version>2.3.1</hive.version>
         <hadoop.version>3.1.4</hadoop.version>
-        <junit.version>5.7.1</junit.version>
+        <junit.version>5.8.1</junit.version>
  		<log4j.version>2.17.1</log4j.version>
         <parquet.version>1.12.3</parquet.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <slf4j.version>1.7.24</slf4j.version>
+        <slf4j.version>1.7.32</slf4j.version>
     </properties>
 
     <dependencyManagement>
@@ -70,10 +71,34 @@
                 <version>${flink.version}</version>
             </dependency>
             
-             <dependency>
+            <dependency>
                 <groupId>org.mockito</groupId>
                 <artifactId>mockito-core</artifactId>
-	            <version>3.12.4</version>
+                <version>3.12.4</version>
+             </dependency>
+  
+             <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+             <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.vintage</groupId>
+                <artifactId>junit-vintage-engine</artifactId>
+                <version>${junit.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -138,10 +163,14 @@
 			<artifactId>hudi-flink</artifactId>
 			<version>${hudi.version}</version>
 			<exclusions>
-				<exclusion>
-					<groupId>org.apache.hudi</groupId>
-					<artifactId>hudi-flink1.13.x</artifactId>
-				</exclusion>
+                <exclusion>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-flink1.13.x</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hudi</groupId>
+                    <artifactId>hudi-flink1.14.x</artifactId>
+                </exclusion>
 				<exclusion>
 					<groupId>org.apache.flink</groupId>
 					<artifactId>flink-streaming-java</artifactId>
@@ -170,7 +199,21 @@
 
         <dependency>
             <groupId>org.apache.parquet</groupId>
-			<artifactId>parquet-avro</artifactId>
+            <artifactId>parquet-avro</artifactId>
+        </dependency>
+
+        <!-- Hudi has hive-exec scoped as "provided" -->
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-exec</artifactId>
+            <classifier>core</classifier>
+            <version>${hive.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -292,21 +335,18 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <version>1.7.1</version>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
             <scope>test</scope>
         </dependency>
 
