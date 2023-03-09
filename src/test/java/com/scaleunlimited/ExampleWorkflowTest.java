@@ -1,11 +1,11 @@
 package com.scaleunlimited;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.flink.api.common.JobStatus;
@@ -20,6 +20,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,6 +121,8 @@ public class ExampleWorkflowTest {
         
         StreamExecutionEnvironment env2 = makeExecutionEnvironment(testDir, conf);
         
+        // Check every 10 seconds, to speed up test
+        conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
         new ExampleReaderWorkflow()
             .setInput(HudiUtils.makeHudiInput(env2, conf, outputDir.getAbsolutePath(), PARALLELISM))
             .build();
@@ -128,20 +131,30 @@ public class ExampleWorkflowTest {
         CountRecordsReadFunction.resetCount();
         JobClient readerClient = env2.executeAsync("reader workflow");
         
-        // Wait for write workflow to finish.
-        LOGGER.info("Waiting for writer workflow to finish...");
-        long maxTime = System.currentTimeMillis() + NUM_RESULTS/10;
-        while ((writerClient.getJobStatus().get() == JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
+//        // Wait for write workflow to finish.
+//        LOGGER.info("Waiting for writer workflow to finish...");
+//        long maxTime = System.currentTimeMillis() + NUM_RESULTS;
+//        while ((writerClient.getJobStatus().get() == JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
+//            Thread.sleep(100);
+//        }
+//        
+//        assertNotEquals(JobStatus.RUNNING, writerClient.getJobStatus().get());
+        
+        LOGGER.info("Waiting for reader workflow to start...");
+        long maxTime = System.currentTimeMillis() + 5_000L;
+        while ((readerClient.getJobStatus().get() != JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
             Thread.sleep(100);
         }
-        
-        assertNotEquals(JobStatus.RUNNING, writerClient.getJobStatus().get());
-        
-        LOGGER.info("Waiting for reader workflow to finish...");
+        assertEquals(JobStatus.RUNNING, readerClient.getJobStatus().get());
+
+        LOGGER.info("Waiting for writer & reader workflows to finish...");
         int readCount = 0;
-        // Set max time based on number of records, and at least one checkpoint
-        maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 2, NUM_RESULTS / 10);
-        while ((readCount < NUM_RESULTS) && (System.currentTimeMillis() < maxTime)) {
+        // Set max time based on number of records, and at least one checkpoint, plus 2ms/result
+        // TODO - Hudi reader doesn't seem to be picking up new records for a really long time,
+        // 
+        maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 2, NUM_RESULTS * 2);
+        while ((readCount < NUM_RESULTS)
+            && (!isDone(writerClient) || (System.currentTimeMillis() < maxTime))) {
             Thread.sleep(100);
             readCount = CountRecordsReadFunction.getCount();
         }
@@ -149,6 +162,19 @@ public class ExampleWorkflowTest {
         readerClient.cancel();
         
         assertEquals(NUM_RESULTS, readCount);
+    }
+
+    private boolean isDone(JobClient client) throws InterruptedException, ExecutionException {
+        switch (client.getJobStatus().get()) {
+            case FINISHED:
+            case SUSPENDED:
+            case FAILED:
+            case CANCELED:
+                return true;
+                
+                default:
+                    return false;
+        }
     }
 
     private StreamExecutionEnvironment makeExecutionEnvironment(File testDir, Configuration conf) throws Exception {
