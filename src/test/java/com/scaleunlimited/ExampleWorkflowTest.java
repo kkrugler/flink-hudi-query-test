@@ -131,15 +131,6 @@ public class ExampleWorkflowTest {
         CountRecordsReadFunction.resetCount();
         JobClient readerClient = env2.executeAsync("reader workflow");
         
-//        // Wait for write workflow to finish.
-//        LOGGER.info("Waiting for writer workflow to finish...");
-//        long maxTime = System.currentTimeMillis() + NUM_RESULTS;
-//        while ((writerClient.getJobStatus().get() == JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
-//            Thread.sleep(100);
-//        }
-//        
-//        assertNotEquals(JobStatus.RUNNING, writerClient.getJobStatus().get());
-        
         LOGGER.info("Waiting for reader workflow to start...");
         long maxTime = System.currentTimeMillis() + 5_000L;
         while ((readerClient.getJobStatus().get() != JobStatus.RUNNING) && (System.currentTimeMillis() < maxTime)) {
@@ -150,8 +141,6 @@ public class ExampleWorkflowTest {
         LOGGER.info("Waiting for writer & reader workflows to finish...");
         int readCount = 0;
         // Set max time based on number of records, and at least one checkpoint, plus 2ms/result
-        // TODO - Hudi reader doesn't seem to be picking up new records for a really long time,
-        // 
         maxTime = System.currentTimeMillis() + Math.max(CHECKPOINT_INTERVAL_MS * 2, NUM_RESULTS * 2);
         while ((readCount < NUM_RESULTS)
             && (!isDone(writerClient) || (System.currentTimeMillis() < maxTime))) {
